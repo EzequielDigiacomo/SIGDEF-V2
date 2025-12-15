@@ -12,10 +12,6 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-    ?? (builder.Environment.IsDevelopment()
-        ? "http://localhost:7112"
-        : "https://tufrontend.onrender.com"); // URL por defecto
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -63,7 +59,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins(frontendUrl)
+        policy
                .AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();
@@ -72,10 +68,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// 🔹 LOG DE INICIO
-Console.WriteLine("========================================");
-Console.WriteLine("🚀 SIGDEF API INICIANDO...");
-Console.WriteLine("========================================");
 
 // 🔹 MIDDLEWARE SIMPLIFICADO - Solo logging, no manejo de excepciones
 app.Use(async (context, next) =>
@@ -157,7 +149,6 @@ if (app.Environment.IsDevelopment())
 // 🔹 USAR CORS
 app.UseCors("AllowAll");
 app.UseCors(builder => builder
-    .WithOrigins("https://mi-frontend-react.onrender.com")
     .AllowAnyMethod()
     .AllowAnyHeader());
 
@@ -167,18 +158,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-Console.WriteLine("========================================");
-Console.WriteLine("✅ SIGDEF API LISTA");
-Console.WriteLine($"🌐 Escuchando en: http://0.0.0.0:5000");
-Console.WriteLine($"📚 Swagger disponible en: http://localhost:5000/swagger");
-Console.WriteLine("========================================");
 
 app.Run();
-
-Console.WriteLine("========================================");
-Console.WriteLine("🛑 SIGDEF API DETENIDA");
-Console.WriteLine("========================================");
-
 
 // ---------------------------------------------
 // MÉTODO: CONFIGURAR AUTENTICACIÓN JWT

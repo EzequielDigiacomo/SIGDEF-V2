@@ -1,0 +1,5 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=mainline.proxy.rlwy.net;Port=38175;Database=railway;Username=postgres;Password=lQPbyCffBbQqRYyIoprHrKuOFnVjrZJS;SSL Mode=Require;Trust Server Certificate=true"
+  }
+}
