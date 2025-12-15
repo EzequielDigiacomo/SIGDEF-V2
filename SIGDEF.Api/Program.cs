@@ -150,6 +150,10 @@ if (app.Environment.IsDevelopment())
 
 // 🔹 USAR CORS
 app.UseCors("AllowAll");
+app.UseCors(builder => builder
+    .WithOrigins("https://mi-frontend-react.onrender.com")
+    .AllowAnyMethod()
+    .AllowAnyHeader());
 
 // 🔹 IMPORTANTE: Authentication ANTES de Authorization
 app.UseAuthentication();
