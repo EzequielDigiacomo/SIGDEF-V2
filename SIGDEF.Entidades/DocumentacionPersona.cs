@@ -8,11 +8,11 @@ namespace SIGDEF.Entidades
     {
         [Key]
         public int Id { get; set; }
-        public int PersonaId { get; set; }
+        public int? PersonaId { get; set; }
         // Aquí conectamos con la entidad BASE "Persona"
         [ForeignKey("PersonaId")]
         public virtual Persona Persona { get; set; } = null!;
-        public int TipoDocumento { get; set; } // Enum (DNI, Pasaporte, etc)
+        public int? TipoDocumento { get; set; } // Enum (DNI, Pasaporte, etc)
         [Required]
         public string UrlArchivo { get; set; } = string.Empty;
         [MaxLength(100)]

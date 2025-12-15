@@ -19,13 +19,12 @@ builder.Services.AddControllers();
 builder.Services.Configure<MercadoPagoSettings>(
     builder.Configuration.GetSection("MercadoPagoSettings"));
 
-
 builder.Services.Configure<CloudinarySettings>(
     builder.Configuration.GetSection("CloudinarySettings"));
 
 builder.Services.AddSingleton<SIGDEF.Services.CloudinaryService>();
 
-// 🔹 REGISTRAR SERVICIOS DE PAGO (TU EXTENSIÓN CORRECTA)
+// 🔹 REGISTRAR SERVICIOS DE PAGO
 builder.Services.AddPaymentServices(builder.Configuration);
 
 // 🔹 CONFIGURAR EL DBCONTEXT (PostgreSQL)
@@ -39,10 +38,13 @@ builder.Services.Configure<FormOptions>(options =>
     options.ValueLengthLimit = int.MaxValue;
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
+
 // 🔹 CONFIGURAR KESTREL PARA ACEPTAR ARCHIVOS MÁS GRANDES
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(2);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
 });
 
 // 🔹 CONFIGURAR AUTENTICACIÓN JWT
@@ -64,21 +66,72 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// 🔹 LOG DE INICIO
+Console.WriteLine("========================================");
+Console.WriteLine("🚀 SIGDEF API INICIANDO...");
+Console.WriteLine("========================================");
+
+// 🔹 MIDDLEWARE SIMPLIFICADO - Solo logging, no manejo de excepciones
+app.Use(async (context, next) =>
+{
+    var requestPath = context.Request.Path;
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+    logger.LogInformation($"📥 REQUEST: {context.Request.Method} {requestPath}");
+
+    try
+    {
+        await next();
+        logger.LogInformation($"✅ RESPONSE: {context.Response.StatusCode} para {requestPath}");
+    }
+    catch (OperationCanceledException)
+    {
+        // Cliente canceló la petición - esto es normal, no es un error crítico
+        logger.LogWarning($"⚠️ Cliente canceló la petición: {requestPath}");
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = 499; // Client Closed Request
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"Petición cancelada\"}");
+        }
+    }
+    catch (Exception ex)
+    {
+        // Log pero deja que el ExceptionHandler lo maneje
+        logger.LogError(ex, $"❌ Error en petición: {requestPath}");
+        throw; // Re-lanzar para que el ExceptionHandler lo capture
+    }
+});
+
+// 🔹 MANEJO GLOBAL DE EXCEPCIONES
 app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
     {
-        context.Response.StatusCode = 500;
-        context.Response.ContentType = "application/json";
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
         var exceptionHandlerPathFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
         var exception = exceptionHandlerPathFeature?.Error;
-        // Log detallado del error
-        Console.WriteLine($"❌ ERROR NO MANEJADO: {exception?.Message}");
-        Console.WriteLine($"❌ STACK TRACE: {exception?.StackTrace}");
+
+        // No cerrar el servidor por errores de cliente
+        if (exception is OperationCanceledException ||
+            exception is IOException)
+        {
+            logger.LogWarning(exception, "⚠️ Error de cliente (no crítico)");
+            context.Response.StatusCode = 400;
+        }
+        else
+        {
+            logger.LogError(exception, "❌ Error del servidor");
+            context.Response.StatusCode = 500;
+        }
+
+        context.Response.ContentType = "application/json";
+
         await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
         {
             error = exception?.Message ?? "Error desconocido",
-            stackTrace = exception?.StackTrace
+            type = exception?.GetType().Name
         }));
     });
 });
@@ -95,16 +148,26 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
 // 🔹 USAR CORS
 app.UseCors("AllowAll");
+
 // 🔹 IMPORTANTE: Authentication ANTES de Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
+Console.WriteLine("========================================");
+Console.WriteLine("✅ SIGDEF API LISTA");
+Console.WriteLine($"🌐 Escuchando en: http://0.0.0.0:5000");
+Console.WriteLine($"📚 Swagger disponible en: http://localhost:5000/swagger");
+Console.WriteLine("========================================");
+
 app.Run();
+
+Console.WriteLine("========================================");
+Console.WriteLine("🛑 SIGDEF API DETENIDA");
+Console.WriteLine("========================================");
 
 
 // ---------------------------------------------
@@ -159,7 +222,6 @@ void ConfigureSwagger(WebApplicationBuilder builder)
             }
         });
 
-        // 🔹 Configurar JWT para Swagger
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header usando Bearer. Ej: 'Bearer 12345abcdef'",
