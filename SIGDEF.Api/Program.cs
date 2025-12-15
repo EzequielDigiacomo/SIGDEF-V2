@@ -12,6 +12,11 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+    ?? (builder.Environment.IsDevelopment()
+        ? "http://localhost:7112"
+        : "https://tufrontend.onrender.com"); // URL por defecto
+
 // Add services to the container.
 builder.Services.AddControllers();
 
@@ -58,7 +63,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(frontendUrl)
+               .AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -150,6 +156,10 @@ if (app.Environment.IsDevelopment())
 
 // 🔹 USAR CORS
 app.UseCors("AllowAll");
+app.UseCors(builder => builder
+    .WithOrigins("https://mi-frontend-react.onrender.com")
+    .AllowAnyMethod()
+    .AllowAnyHeader());
 
 // 🔹 IMPORTANTE: Authentication ANTES de Authorization
 app.UseAuthentication();
