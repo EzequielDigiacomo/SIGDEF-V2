@@ -1,40 +1,34 @@
-# Etapa 1: Build
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
+# Consulte https://aka.ms/customizecontainer para aprender a personalizar su contenedor de depuración y cómo Visual Studio usa este Dockerfile para compilar sus imágenes para una depuración más rápida.
 
-# 1. Copiar el archivo de soluci�n
-COPY ["SIGDEF.sln", "./"]
-
-# 2. Copiar los archivos .csproj de cada proyecto
-COPY ["01.Api/SIGDEF.Api.csproj", "01.Api/"]
-COPY ["02.Controlador/SIGDEF.Controlador.csproj", "02.Controlador/"]
-COPY ["03.AccessDatos/SIGDEF.AccessDatos.csproj", "03.AccessDatos/"]
-COPY ["04.Entidades/SIGDEF.Entidades.csproj", "04.Entidades/"]
-COPY ["05.Pagos/SIGDEF.Pagos.csproj", "05.Pagos/"]
-
-# 3. Restaurar dependencias
-RUN dotnet restore "SIGDEF.sln"
-
-# 4. Copiar TODO el c�digo fuente
-COPY . .
-
-# 5. Publicar el proyecto API (proyecto de entrada)
-WORKDIR "/src/01.Api"
-RUN dotnet publish "SIGDEF.Api.csproj" -c Release -o /app/publish
-
-# Etapa 2: Runtime (imagen m�s liviana)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+# Esta fase se usa cuando se ejecuta desde VS en modo rápido (valor predeterminado para la configuración de depuración)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+USER $APP_UID
 WORKDIR /app
-
-# Variables de entorno para Render/Railway/etc
-ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ASPNETCORE_URLS=http://+:8080
-
-# Puerto que usar� la app
 EXPOSE 8080
+EXPOSE 8081
 
-# Copiar los archivos publicados desde la etapa de build
-COPY --from=build /app/publish .
 
-# Comando de inicio
+# Esta fase se usa para compilar el proyecto de servicio
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["SIGDEF.Api/SIGDEF.Api.csproj", "SIGDEF.Api/"]
+COPY ["Pagos/Pagos.csproj", "Pagos/"]
+COPY ["SIGDEF.Controlador/SIGDEF.Controlador.csproj", "SIGDEF.Controlador/"]
+COPY ["SIGDEF.AccesoDatos/SIGDEF.AccesoDatos.csproj", "SIGDEF.AccesoDatos/"]
+COPY ["SIGDEF.Entidades/SIGDEF.Entidades.csproj", "SIGDEF.Entidades/"]
+RUN dotnet restore "./SIGDEF.Api/SIGDEF.Api.csproj"
+COPY . .
+WORKDIR "/src/SIGDEF.Api"
+RUN dotnet build "./SIGDEF.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+# Esta fase se usa para publicar el proyecto de servicio que se copiará en la fase final.
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./SIGDEF.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+# Esta fase se usa en producción o cuando se ejecuta desde VS en modo normal (valor predeterminado cuando no se usa la configuración de depuración)
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "SIGDEF.Api.dll"]
